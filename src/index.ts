@@ -125,28 +125,55 @@ function handleRange(req: Request, resp: Response) {
 	const [, ns1, ns2] = match;
 	if (!ns1 && !ns2) return resp;
 
-	const [n1, n2] = [parseInt(ns1), parseInt(ns2)];
+	// we add one to n2 because n2 is inclusive, and its much easier
+	// to pretend its exclusive for our means.
+	const [n1, n2] = [ns1 && parseInt(ns1), ns2 && (parseInt(ns2) + 1)];
 
 	//if (resp.bodyUsed) throw new Error("body should not be used in handleRange()");
 
+	const origLen = parseInt(resp.headers.get("Content-Length")!);
+
+	const len = (n2 || origLen) - (n1 || 0);
+
+	// out of range
+	if (n2 && n2 > origLen)
+		return new Response(`416 Range Not Satisfiable
+There is no ${n2 - 1}th byte (0-based counting!) in a ${origLen} byte body. This same information has been relayed in the 'Content-Range' header as per spec.`, {
+		status: 416,
+		headers: {
+			'Content-Range': `bytes */${origLen}`
+		}
+	});
+
 	const reader = resp.body.getReader();
 	let i = 0;
+
+	//console.log("DEBUG INFO: slicing a body length ", origLen, " into range ", n1, " to ", n2);
 
 	const newBody = new ReadableStream({
 		start(controller) {
 			function push() {
 				reader.read().then(({ done, value }) => {
-					if (done) return controller.close();
+					if (done) {
+						//console.log("DEBUG INFO: controller.close()");
+						return controller.close();
+					}
+					//console.log("DEBUG INFO: got chunk! at ", i);
 
 					// handle skipping the start
 					if (n1 && i < n1) {
 						const toSkip = n1 - i;
 
+						i += toSkip;
+
 						if (value.length > toSkip) {
 							// we need to slice some of this!
 							const afterSkip = value.slice(toSkip);
 							value = afterSkip;
-							i += toSkip;
+						}
+						else {
+							// skip the entire chunk!
+							return push();
 						}
 					}
 
@@ -170,22 +197,18 @@ function handleRange(req: Request, resp: Response) {
 		},
 	});
 
-	const origLen = parseInt(resp.headers.get("Content-Length")!);
-
-	const len = (n2 ?? origLen) - (n1 ?? 0);
-
 	// this is necessary to set the content-length
 	// as per https://developers.cloudflare.com/workers/runtime-apis/response#set-the-content-length-header
 	const flStream = new FixedLengthStream(len);
 
-	// an exception appears here i think but srcew it
+	// an exception appears here i think but screw it
 	newBody.pipeTo(flStream.writable);
 
 	return new Response(flStream.readable, {
 		status: 206,
 		headers: {
 			...Object.fromEntries(resp.headers.entries()),
-			"Content-Range": `bytes ${n1 ?? 0}-${n2 ?? i}/${origLen /* ?? '*' */}`,
+			"Content-Range": `bytes ${n1 ?? 0}-${(n2 || i) - 1}/${origLen /* ?? '*' */}`,
 		},
 	});
 }
