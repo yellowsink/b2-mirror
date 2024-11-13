@@ -78,8 +78,11 @@ async function getIndex() {
 
 	const resp = `<!DOCTYPE html>
 <html>
-<head><title>sink files index</title></head>
-<body>
+<head>
+<title>sink files index</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css">
+</head>
+<body style="max-width: none">
 <table>
 <thead>
   <tr>
@@ -95,7 +98,7 @@ ${indexResp.files
 	.map(
 		(f: any) => `
   <tr>
-    <td><a href="${encodeURIComponent(f.fileName)}">${f.fileName}</a></td>
+    <td><a href="${encodeURIComponent(f.fileName).replaceAll('%2F', '/')}">${f.fileName}</a></td>
     <td>${f.contentType}</td>
     <td>${formatBytes(f.contentLength)}</td>
     <td>${millisToISO(f.uploadTimestamp)}</td>
@@ -216,13 +219,14 @@ There is no ${n2 - 1}th byte (0-based counting!) in a ${origLen} byte body. This
 async function handleReq(event: FetchEvent) {
 	const cache = caches.default; // Cloudflare edge caching
 
-	const url = new URL(event.request.url);
+	let url = new URL(event.request.url);
 
 	if (url.pathname === "/") return await getIndex();
 
 	if (/* url.host === B2_DOMAIN &&  */ !url.pathname.startsWith(b2UrlPath)) {
-		url.pathname = b2UrlPath + url.pathname;
-		url.host = B2_DOMAIN;
+		const pn = url.pathname.slice(1).replaceAll("/", "%2F"); // remove /, then convert real slashes to fake slashes
+		url = new URL("https://" + B2_DOMAIN);
+		url.pathname = `${b2UrlPath}/${pn}`;
 	}
 
 	let response = await cache.match(url); // try to find match for this request in the edge cache
