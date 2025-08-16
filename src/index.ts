@@ -32,7 +32,7 @@ const mimeTypeOverrides = {
 };
 
 // define a function we can re-use to fix headers
-function fixHeaders(_url: URL, status: number, headers: Headers) {
+function fixHeaders(url: URL, status: number, headers: Headers) {
 	const newHdrs = new Headers(headers);
 
 	// add basic cors headers
@@ -48,7 +48,7 @@ function fixHeaders(_url: URL, status: number, headers: Headers) {
 	if (ETag) newHdrs.set("ETag", ETag);
 
 	// fix content type based on overrides
-	const overrideMime = mimeTypeOverrides[extension(_url)];
+	const overrideMime = mimeTypeOverrides[extension(url.pathname)];
 	if (overrideMime)
 		newHdrs.set("Content-Type", overrideMime);
 
