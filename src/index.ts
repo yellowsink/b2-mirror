@@ -29,6 +29,7 @@ const mimeTypeOverrides = {
 	webp: "image/webp", // inferred by backblaze as audio/x-wav
 	zst: "application/zstd", // sometimes inferred correctly!, sometimes application/octet-stream
 	zstd: "application/zstd", // ditto
+	opus: "audio/ogg", // application/octet-stream
 };
 
 // define a function we can re-use to fix headers
