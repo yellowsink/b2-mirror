@@ -25,6 +25,12 @@ const removeHeaders = [
 ];
 const expiration = 31536000; // override browser cache for images - 1 year
 
+const mimeTypeOverrides = {
+	webp: "image/webp", // inferred by backblaze as audio/x-wav
+	zst: "application/zstd", // sometimes inferred correctly!, sometimes application/octet-stream
+	zstd: "application/zstd", // ditto
+};
+
 // define a function we can re-use to fix headers
 function fixHeaders(_url: URL, status: number, headers: Headers) {
 	const newHdrs = new Headers(headers);
@@ -41,6 +47,11 @@ function fixHeaders(_url: URL, status: number, headers: Headers) {
 	const ETag = newHdrs.get("x-bz-content-sha1") || newHdrs.get("x-bz-info-src_last_modified_millis") || newHdrs.get("x-bz-file-id");
 	if (ETag) newHdrs.set("ETag", ETag);
 
+	// fix content type based on overrides
+	const overrideMime = mimeTypeOverrides[extension(_url)];
+	if (overrideMime)
+		newHdrs.set("Content-Type", overrideMime);
+
 	// remove unnecessary headers
 	removeHeaders.forEach((header) => newHdrs.delete(header));
 	return newHdrs;
@@ -55,6 +66,8 @@ function formatBytes(b: number) {
 
 	return b + "B";
 }
+
+const extension = (filename: string) => filename.split(".").at(-1);
 
 // prepares the index page
 async function getIndex() {
@@ -99,7 +112,7 @@ ${indexResp.files
 		(f: any) => `
   <tr>
     <td><a href="${encodeURIComponent(f.fileName).replaceAll('%2F', '/')}">${f.fileName}</a></td>
-    <td>${f.contentType}</td>
+    <td>${mimeTypeOverrides[extension(f.fileName)] ?? f.contentType}</td>
     <td>${formatBytes(f.contentLength)}</td>
     <td>${millisToISO(f.uploadTimestamp)}</td>
   </tr>
